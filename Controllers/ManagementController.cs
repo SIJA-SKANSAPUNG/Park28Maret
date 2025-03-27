@@ -1785,32 +1785,42 @@ namespace ParkIRC.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> UpdateParkingRates(ParkingRates rates)
+        public async Task<IActionResult> UpdateParkingRates(ParkingRateConfiguration rates)
         {
-            if (!ModelState.IsValid)
+            try 
             {
-                return BadRequest(ModelState);
-            }
+                var existingRates = await _context.ParkingRates
+                    .FirstOrDefaultAsync();
 
-            var existingRates = await _context.ParkingRates.FirstOrDefaultAsync();
-            if (existingRates == null)
-            {
-                await _context.ParkingRates.AddAsync(rates);
-            }
-            else
-            {
-                // Convert to configuration for update
-                var rateConfig = rates.ToConfiguration();
-                
-                existingRates.MotorcycleRate = rateConfig.MotorcycleRate;
-                existingRates.CarRate = rateConfig.CarRate;
-                existingRates.AdditionalHourRate = rateConfig.AdditionalHourRate;
-                existingRates.MaximumDailyRate = rateConfig.MaximumDailyRate;
-                existingRates.UpdatedBy = rateConfig.LastModifiedBy;
-            }
+                if (existingRates == null)
+                {
+                    var rateConfig = new ParkingRateConfiguration
+                    {
+                        MotorcycleRate = rates.MotorcycleRate,
+                        CarRate = rates.CarRate,
+                        AdditionalHourRate = rates.AdditionalHourRate,
+                        MaximumDailyRate = rates.MaximumDailyRate,
+                        LastModifiedBy = rates.UpdatedBy
+                    };
+                    await _context.ParkingRates.AddAsync(rateConfig);
+                }
+                else
+                {
+                    existingRates.MotorcycleRate = rates.MotorcycleRate;
+                    existingRates.CarRate = rates.CarRate;
+                    existingRates.AdditionalHourRate = rates.AdditionalHourRate;
+                    existingRates.MaximumDailyRate = rates.MaximumDailyRate;
+                    existingRates.UpdatedBy = rates.UpdatedBy;
+                }
 
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating parking rates");
+                return StatusCode(500, new { message = "Terjadi kesalahan saat memperbarui tarif parkir" });
+            }
         }
     }
 }

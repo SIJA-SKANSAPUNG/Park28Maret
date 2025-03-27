@@ -65,18 +65,15 @@ namespace ParkIRC.Controllers
                 
                 var dailyRevenue = await _context.ParkingTransactions
                     .Where(t => t.PaymentTime.HasValue && t.PaymentTime.Value.Date == today)
-                    .Select(t => t.TotalAmount)
-                    .SumAsync(t => t);
+                    .SumAsync(t => t.TotalAmount);
                     
                 var weeklyRevenue = await _context.ParkingTransactions
                     .Where(t => t.PaymentTime.HasValue && t.PaymentTime.Value.Date >= weekStart && t.PaymentTime.Value.Date <= today)
-                    .Select(t => t.TotalAmount)
-                    .SumAsync(t => t);
+                    .SumAsync(t => t.TotalAmount);
                     
                 var monthlyRevenue = await _context.ParkingTransactions
                     .Where(t => t.PaymentTime.HasValue && t.PaymentTime.Value.Date >= monthStart && t.PaymentTime.Value.Date <= today)
-                    .Select(t => t.TotalAmount)
-                    .SumAsync(t => t);
+                    .SumAsync(t => t.TotalAmount);
                 
                 // Get data that requires more complex queries
                 var recentActivity = await GetRecentActivity();
@@ -304,7 +301,7 @@ namespace ParkIRC.Controllers
                 var existingVehicle = await _context.Vehicles
                     .Include(v => v.ParkingSpace)
                     .FirstOrDefaultAsync(v => v.VehicleNumber == entryModel.VehicleNumber);
-                
+
                 if (existingVehicle != null && existingVehicle.IsParked)
                 {
                     _logger.LogWarning("Vehicle {VehicleNumber} is already parked", entryModel.VehicleNumber);
@@ -585,6 +582,15 @@ namespace ParkIRC.Controllers
             return await _context.ParkingSpaces
                 .Where(ps => !ps.IsOccupied && ps.SpaceType.ToLower() == type.ToLower())
                 .FirstOrDefaultAsync();
+        }
+
+        private int CalculateDuration(DateTime entryTime, DateTime? exitTime)
+        {
+            if (!exitTime.HasValue)
+                return 0;
+
+            var duration = exitTime.Value - entryTime;
+            return (int)Math.Ceiling(duration.TotalHours);
         }
 
         private static decimal CalculateParkingFee(DateTime entryTime, DateTime exitTime, decimal hourlyRate)
@@ -870,16 +876,13 @@ namespace ParkIRC.Controllers
             var availableSpaces = await _context.ParkingSpaces.CountAsync(s => !s.IsOccupied);
             var dailyRevenue = await _context.ParkingTransactions
                 .Where(t => t.PaymentTime.HasValue && t.PaymentTime.Value.Date == today)
-                .Select(t => t.TotalAmount)
-                .SumAsync(t => t);
+                .SumAsync(t => t.TotalAmount);
             var weeklyRevenue = await _context.ParkingTransactions
                 .Where(t => t.PaymentTime.HasValue && t.PaymentTime.Value.Date >= weekStart && t.PaymentTime.Value.Date <= today)
-                .Select(t => t.TotalAmount)
-                .SumAsync(t => t);
+                .SumAsync(t => t.TotalAmount);
             var monthlyRevenue = await _context.ParkingTransactions
                 .Where(t => t.PaymentTime.HasValue && t.PaymentTime.Value.Date >= monthStart && t.PaymentTime.Value.Date <= today)
-                .Select(t => t.TotalAmount)
-                .SumAsync(t => t);
+                .SumAsync(t => t.TotalAmount);
 
             return new DashboardViewModel
             {
@@ -1541,7 +1544,7 @@ namespace ParkIRC.Controllers
                         EntryTime = t.EntryTime,
                         ExitTime = t.ExitTime,
                         Duration = t.ExitTime != default(DateTime) ? 
-                            (t.ExitTime.Value - t.EntryTime).TotalMinutes.ToString("0") : 
+                            ((t.ExitTime.Value - t.EntryTime).TotalHours).ToString("F1") + " hours" : 
                             "In Progress",
                         Amount = t.TotalAmount,
                         Status = t.ExitTime != default(DateTime) ? "Completed" : "In Progress"
@@ -1708,7 +1711,7 @@ namespace ParkIRC.Controllers
 
                 var today = DateTime.Today;
                 var todayTransactions = await _context.ParkingTransactions
-                    .Where(t => t.EntryTime.Date == today)
+                    .Where(x => x.EntryTime.Date == today)
                     .ToListAsync();
 
                 var todayRevenue = todayTransactions.Sum(t => t.TotalAmount);
@@ -1779,7 +1782,7 @@ namespace ParkIRC.Controllers
                     {
                         exitTime = t.ExitTime.HasValue ? t.ExitTime.Value.ToString("dd/MM/yyyy HH:mm") : "",
                         vehicleNumber = t.Vehicle.VehicleNumber,
-                        duration = CalculateDuration(t.EntryTime, t.ExitTime.Value),
+                        duration = CalculateDuration(t.EntryTime, t.ExitTime),
                         totalAmount = t.TotalAmount
                     })
                     .ToListAsync();
@@ -1793,17 +1796,16 @@ namespace ParkIRC.Controllers
             }
         }
 
-        private string CalculateDuration(DateTime start, DateTime end)
+        private string CalculateDuration(DateTime start, DateTime? end)
         {
-            var duration = end - start;
+            if (!end.HasValue)
+                return "0h 0m";
+
+            var duration = end.Value - start;
             var hours = Math.Floor(duration.TotalHours);
             var minutes = duration.Minutes;
 
-            if (hours > 0)
-            {
-                return $"{hours} jam {minutes} menit";
-            }
-            return $"{minutes} menit";
+            return $"{hours}h {minutes}m";
         }
 
         [HttpGet]

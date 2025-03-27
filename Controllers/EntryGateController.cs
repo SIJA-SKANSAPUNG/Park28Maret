@@ -69,11 +69,11 @@ namespace ParkIRC.Controllers
                 .Select(t => new RecentTransactionViewModel
                 {
                     Id = t.Id,
-                    TicketNumber = t.TicketNumber,
+                    TicketNumber = int.TryParse(t.TicketNumber, out int ticketNum) ? ticketNum : 0,
                     VehicleNumber = t.Vehicle.VehicleNumber,
                     VehicleType = t.Vehicle.VehicleType,
                     EntryTime = t.EntryTime,
-                    EntryPoint = t.EntryPoint
+                    EntryPoint = int.TryParse(t.EntryPoint, out int entryPoint) ? entryPoint : 0
                 })
                 .ToListAsync();
             
@@ -87,7 +87,7 @@ namespace ParkIRC.Controllers
             if (ModelState.IsValid)
             {
                 int gateCount = await _context.EntryGates.CountAsync() + 1;
-                gate.Id = $"ENTRY{gateCount}";
+                gate.Id = gateCount;
                 gate.IsActive = true;
                 gate.LastActivity = DateTime.Now;
                 
@@ -96,10 +96,15 @@ namespace ParkIRC.Controllers
                 
                 _logger.LogInformation($"New entry gate added: {gate.Name}");
                 
-                return RedirectToAction(nameof(Index));
+                return Ok(new { 
+                    id = gate.Id, 
+                    name = gate.Name 
+                });
             }
-            
-            return View(gate);
+            else
+            {
+                return BadRequest(ModelState);
+            }
         }
 
         [HttpPost]
@@ -155,10 +160,10 @@ namespace ParkIRC.Controllers
                 {
                     TicketNumber = await _ticketService.GenerateTicketNumber(request.VehicleType),
                     EntryTime = DateTime.Now,
-                    EntryPoint = request.GateId.ToString(), // Convert to string
+                    EntryPoint = request.GateId.ToString(), 
                     VehicleImagePath = savedImagePath,
-                    VehicleNumber = request.VehicleNumber, // Input manual
-                    VehicleType = request.VehicleType,     // Input manual/preset
+                    VehicleNumber = request.VehicleNumber, 
+                    VehicleType = request.VehicleType,     
                     IsManualEntry = true
                 };
 
@@ -195,24 +200,29 @@ namespace ParkIRC.Controllers
                 // Generate ticket number
                 string ticketNumber = await _ticketService.GenerateTicketNumber(request.VehicleType);
 
-                // Create transaction
+                // Update parking space
+                availableSpace.IsOccupied = true;
+                availableSpace.OccupiedTime = DateTime.Now;
+
+                // Create parking transaction
                 var transaction = new ParkingTransaction
                 {
                     TicketNumber = ticketNumber,
-                    EntryPoint = request.EntryGateId.ToString(), // Convert to string
-                    ParkingSpaceId = availableSpace.Id.ToString(), // Convert to string
-                    VehicleNumber = request.VehicleNumber,
                     EntryTime = DateTime.Now,
+                    EntryPoint = request.GateId.ToString(), 
+                    VehicleNumber = request.VehicleNumber,
                     VehicleType = request.VehicleType,
-                    ImagePath = request.ImagePath
+                    ParkingSpaceId = availableSpace.Id, 
+                    IsManualEntry = true
                 };
 
                 _context.ParkingTransactions.Add(transaction);
                 await _context.SaveChangesAsync();
 
-                return Ok(new { 
-                    ticketNumber = ticketNumber,
-                    spaceNumber = availableSpace.SpaceNumber.ToString() // Convert to string
+                return Ok(new 
+                { 
+                    ticketNumber = ticketNumber, 
+                    spaceNumber = availableSpace.SpaceNumber.ToString() 
                 });
             }
             catch (Exception ex)
