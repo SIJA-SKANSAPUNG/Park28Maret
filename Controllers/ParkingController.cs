@@ -900,30 +900,30 @@ namespace ParkIRC.Controllers
             };
         }
 
+        [ResponseCache(Duration = 60)]
+        public async Task<IActionResult> Dashboard()
+        {
+            int occupiedSpots = GetOccupiedSpots();
+            int totalSpaces = await _context.ParkingSpaces.CountAsync();
+            int availableSpaces = totalSpaces - occupiedSpots;
+
+            var model = new DashboardViewModel 
+            { 
+                AvailableSpaces = availableSpaces,
+                OccupiedSpots = occupiedSpots,
+                TotalSpaces = totalSpaces
+            };
+
+            return View(model);
+        }
+
         private int GetOccupiedSpots()
         {
             return _context.ParkingTransactions
                 .Count(t => t.ExitTime == null || t.ExitTime == default(DateTime));
         }
 
-        [ResponseCache(Duration = 60)]
-        public async Task<IActionResult> Dashboard()
-        {
-            int occupiedSpots = GetOccupiedSpots();
-            int totalSpots = await _context.ParkingSpaces.CountAsync();
-            int availableSpots = totalSpots - occupiedSpots;
-
-            var model = new DashboardViewModel 
-            { 
-                AvailableSpots = availableSpots,
-                OccupiedSpots = occupiedSpots
-            };
-
-            return View(model);
-        }
-
         [HttpPost]
-        [ValidateAntiForgeryToken]
         public async Task<IActionResult> BackupData(string backupPeriod, DateTime? startDate, DateTime? endDate, bool includeImages = true)
         {
             try
@@ -1999,12 +1999,6 @@ namespace ParkIRC.Controllers
         {
             public string VehicleNumber { get; set; } = string.Empty;
             public string PaymentMethod { get; set; } = "Cash";
-        }
-
-        private int GetOccupiedSpots()
-        {
-            return _context.ParkingTransactions
-                .Count(t => t.ExitTime == null || t.ExitTime == default(DateTime));
         }
     }
 }
