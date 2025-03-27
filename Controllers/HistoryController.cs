@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using System.Collections.Generic;
+using ParkIRC.ViewModels;
 
 namespace ParkIRC.Controllers
 {
@@ -20,18 +21,12 @@ namespace ParkIRC.Controllers
             _context = context;
         }
 
-        public async Task<IActionResult> Index(string searchString, DateTime? startDate = null, DateTime? endDate = null, string? vehicleType = null)
+        public async Task<IActionResult> Index(DateTime? startDate = null, DateTime? endDate = null, int page = 1, int pageSize = 10)
         {
             var transactions = _context.ParkingTransactions
                 .Include(t => t.Vehicle)
                 .Include(t => t.ParkingSpace)
                 .AsQueryable();
-
-            // Apply filters
-            if (!string.IsNullOrEmpty(searchString))
-            {
-                transactions = transactions.Where(t => t.Vehicle != null && t.Vehicle.VehicleNumber.Contains(searchString));
-            }
 
             if (startDate.HasValue)
             {
@@ -43,34 +38,37 @@ namespace ParkIRC.Controllers
                 transactions = transactions.Where(t => t.EntryTime <= endDate.Value.AddDays(1));
             }
 
-            if (!string.IsNullOrEmpty(vehicleType))
-            {
-                transactions = transactions.Where(t => t.Vehicle != null && t.Vehicle.VehicleType == vehicleType);
-            }
+            var totalCount = await transactions.CountAsync();
 
-            // Get transactions and add to view model
-            var model = await transactions
+            var data = await transactions
                 .OrderByDescending(t => t.EntryTime)
-                .Select(t => new ParkingActivityViewModel
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(t => new 
                 {
-                    VehicleNumber = t.Vehicle != null ? t.Vehicle.VehicleNumber : "Unknown",
+                    TransactionNumber = t.TransactionNumber,
+                    VehicleNumber = t.Vehicle == null ? "Unknown" : t.Vehicle.VehicleNumber,
+                    VehicleType = t.Vehicle == null ? "Unknown" : t.Vehicle.VehicleType,
                     EntryTime = t.EntryTime,
-                    ExitTime = t.ExitTime != default(DateTime) ? t.ExitTime : null,
-                    Duration = t.ExitTime != default(DateTime) ? 
-                        (t.ExitTime - t.EntryTime).ToString() : 
+                    ExitTime = t.ExitTime,
+                    Duration = t.ExitTime.HasValue ? 
+                        $"{(int)(t.ExitTime.Value - t.EntryTime).TotalHours}h {(t.ExitTime.Value - t.EntryTime).Minutes}m" : 
                         "In Progress",
                     Amount = t.TotalAmount,
-                    Status = t.ExitTime != default(DateTime) ? "Completed" : "In Progress"
+                    PaymentStatus = t.PaymentStatus,
+                    PaymentMethod = t.PaymentMethod
                 })
                 .ToListAsync();
 
-            // Pass filter values to view
-            ViewData["CurrentFilter"] = searchString;
-            ViewData["StartDate"] = startDate;
-            ViewData["EndDate"] = endDate;
-            ViewData["VehicleType"] = vehicleType;
+            var viewModel = new HistoryViewModel
+            {
+                Transactions = data,
+                CurrentPage = page,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
 
-            return View(model);
+            return View(viewModel);
         }
 
         public async Task<IActionResult> Details(string? id)
@@ -112,15 +110,15 @@ namespace ParkIRC.Controllers
 
             var data = await transactions
                 .OrderByDescending(t => t.EntryTime)
-                .Select(t => new
+                .Select(t => new 
                 {
                     TransactionNumber = t.TransactionNumber,
-                    VehicleNumber = t.Vehicle != null ? t.Vehicle.VehicleNumber : "Unknown",
-                    VehicleType = t.Vehicle != null ? t.Vehicle.VehicleType : "Unknown",
+                    VehicleNumber = t.Vehicle == null ? "Unknown" : t.Vehicle.VehicleNumber,
+                    VehicleType = t.Vehicle == null ? "Unknown" : t.Vehicle.VehicleType,
                     EntryTime = t.EntryTime,
-                    ExitTime = t.ExitTime != default(DateTime) ? t.ExitTime.ToString("yyyy-MM-dd HH:mm:ss") : "In Progress",
-                    Duration = t.ExitTime != default(DateTime) ?
-                        $"{(int)(t.ExitTime.Value - t.EntryTime).TotalHours}h {(t.ExitTime.Value - t.EntryTime).Minutes}m" :
+                    ExitTime = t.ExitTime,
+                    Duration = t.ExitTime.HasValue ? 
+                        $"{(int)(t.ExitTime.Value - t.EntryTime).TotalHours}h {(t.ExitTime.Value - t.EntryTime).Minutes}m" : 
                         "In Progress",
                     Amount = t.TotalAmount,
                     PaymentStatus = t.PaymentStatus,
@@ -132,10 +130,11 @@ namespace ParkIRC.Controllers
             var csv = "Transaction Number,Vehicle Number,Vehicle Type,Entry Time,Exit Time,Duration,Amount,Payment Status,Payment Method\n";
             foreach (var item in data)
             {
-                csv += $"\"{item.TransactionNumber}\",\"{item.VehicleNumber}\",\"{item.VehicleType}\",\"{item.EntryTime}\",\"{item.ExitTime}\",\"{item.Duration}\",\"{item.Amount}\",\"{item.PaymentStatus}\",\"{item.PaymentMethod}\"\n";
+                csv += $"{item.TransactionNumber},{item.VehicleNumber},{item.VehicleType},{item.EntryTime},{item.ExitTime},{item.Duration},{item.Amount},{item.PaymentStatus},{item.PaymentMethod}\n";
             }
 
-            return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", $"parking-history-{DateTime.Now:yyyyMMdd}.csv");
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csv);
+            return File(bytes, "text/csv", $"parking_transactions_{DateTime.Now:yyyyMMdd}.csv");
         }
     }
 } 

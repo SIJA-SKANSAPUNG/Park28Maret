@@ -8,8 +8,10 @@ namespace ParkIRC.ViewModels
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public string? VehicleNumber { get; set; }
-        public int Page { get; set; } = 1;
+        public int CurrentPage { get; set; } = 1;
         public int PageSize { get; set; } = 10;
+        public int TotalCount { get; set; }
+        public dynamic? Transactions { get; set; }
     }
 
     public class HistoryTransactionViewModel
@@ -19,7 +21,7 @@ namespace ParkIRC.ViewModels
         public string VehicleType { get; set; } = string.Empty;
         public DateTime EntryTime { get; set; }
         public DateTime? ExitTime { get; set; }
-        public TimeSpan Duration { get; set; }
+        public string Duration { get; set; } = string.Empty;
         public decimal Amount { get; set; }
         public string PaymentMethod { get; set; } = string.Empty;
     }

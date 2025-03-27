@@ -82,11 +82,12 @@ namespace ParkIRC.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AddEntryGate(EntryGate gate)
+        public async Task<IActionResult> AddEntryGate([FromBody]EntryGate gate)
         {
             if (ModelState.IsValid)
             {
-                gate.Id = $"ENTRY{(await _context.EntryGates.CountAsync() + 1).ToString()}";
+                int gateCount = await _context.EntryGates.CountAsync() + 1;
+                gate.Id = $"ENTRY{gateCount}";
                 gate.IsActive = true;
                 gate.LastActivity = DateTime.Now;
                 
@@ -103,21 +104,18 @@ namespace ParkIRC.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateEntryGate(string id, bool isActive)
+        public async Task<IActionResult> UpdateEntryGate(string id, bool isOnline)
         {
             var gate = await _context.EntryGates.FindAsync(id);
             if (gate == null)
             {
                 return NotFound();
             }
-            
-            gate.IsActive = isActive;
-            gate.LastActivity = DateTime.Now;
-            
+
+            gate.IsOnline = isOnline;
             await _context.SaveChangesAsync();
-            _logger.LogInformation($"Entry gate {id} status updated: Active = {isActive}");
-            
-            return Json(new { success = true });
+
+            return Ok();
         }
 
         [HttpGet]
@@ -128,14 +126,10 @@ namespace ParkIRC.Controllers
             {
                 return NotFound();
             }
-            
-            return Json(new
-            {
-                id = gate.Id,
-                name = gate.Name,
-                isOnline = gate.IsOnline,
-                isOpen = gate.IsOpen,
-                lastActivity = gate.LastActivity
+
+            return Json(new { 
+                isOnline = gate.IsOnline, 
+                isOpen = gate.IsOpen 
             });
         }
 

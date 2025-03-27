@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using ParkIRC.Services;
 using Microsoft.AspNetCore.Http;
 using FluentValidation.AspNetCore;
+using FluentValidation;
 
 namespace ParkIRC
 {
@@ -30,10 +31,11 @@ namespace ParkIRC
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             });
 
-            // Add input validation
-            services.AddControllers()
-                .AddFluentValidation(fv => 
-                fv.RegisterValidatorsFromAssemblyContaining<Startup>());
+            // Update FluentValidation configuration
+            services.AddFluentValidationAutoValidation();
+            services.AddValidatorsFromAssemblyContaining(typeof(Startup));
+
+            services.AddControllers();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

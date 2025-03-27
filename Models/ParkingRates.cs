@@ -82,5 +82,19 @@ namespace ParkIRC.Models
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         
         public DateTime? UpdatedAt { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal MotorcycleRate { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal CarRate { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal AdditionalHourRate { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal MaximumDailyRate { get; set; }
+        
+        public string? UpdatedBy { get; set; }
     }
 } 

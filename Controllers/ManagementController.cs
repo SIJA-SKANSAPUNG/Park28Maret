@@ -336,7 +336,7 @@ namespace ParkIRC.Controllers
                         {
                             Action = "CHANGE_ROLE",
                             Description = $"Role operator {existingOperator.FullName} diubah menjadi {model.SelectedRole}",
-                            OperatorId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "system",
+                            OperatorId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "system",
                             Timestamp = DateTime.UtcNow
                         };
                         _context.Journals.Add(journal);
@@ -1555,72 +1555,56 @@ namespace ParkIRC.Controllers
 
         [HttpGet]
         public async Task<IActionResult> VehicleHistory(
-            string? status = null,
+            string status = null, 
             DateTime? startDate = null, 
-            DateTime? endDate = null,
-            string? vehicleType = null,
-            string? plateNumber = null,
-            int page = 1)
+            DateTime? endDate = null, 
+            string vehicleType = null, 
+            string plateNumber = null, 
+            int page = 1, 
+            int pageSize = 10)
         {
             var query = _context.ParkingTransactions
                 .Include(t => t.Vehicle)
                 .AsQueryable();
 
-            // Filter by status (In/Out)
             if (!string.IsNullOrEmpty(status))
             {
-                if (status.ToLower() == "in")
-                {
-                    query = query.Where(t => t.ExitTime == null);
-                }
-                else if (status.ToLower() == "out")
-                {
-                    query = query.Where(t => t.ExitTime != null);
-                }
+                query = query.Where(t => 
+                    status == "Keluar" ? t.ExitTime.HasValue : !t.ExitTime.HasValue);
             }
 
-            // Filter by date range
             if (startDate.HasValue)
             {
                 query = query.Where(t => t.EntryTime >= startDate.Value);
             }
+
             if (endDate.HasValue)
             {
-                query = query.Where(t => t.EntryTime <= endDate.Value);
+                query = query.Where(t => t.EntryTime <= endDate.Value.AddDays(1));
             }
 
-            // Filter by vehicle type
             if (!string.IsNullOrEmpty(vehicleType))
             {
                 query = query.Where(t => t.Vehicle.VehicleType == vehicleType);
             }
 
-            // Filter by plate number
             if (!string.IsNullOrEmpty(plateNumber))
             {
                 query = query.Where(t => t.Vehicle.VehicleNumber.Contains(plateNumber));
             }
 
-            // Order by latest first
-            query = query.OrderByDescending(t => t.EntryTime);
-
-            // Pagination
-            int pageSize = 20;
             var transactions = await query
+                .OrderByDescending(t => t.EntryTime)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(t => new VehicleHistoryViewModel
+                .Select(t => new VehicleHistoryPageItemViewModel
                 {
-                    Id = int.Parse(t.Id),
-                    TicketNumber = t.TicketNumber,
+                    Id = t.Id.ToString(),
+                    TransactionNumber = t.TransactionNumber,
                     VehicleNumber = t.Vehicle.VehicleNumber,
                     VehicleType = t.Vehicle.VehicleType,
                     EntryTime = t.EntryTime,
                     ExitTime = t.ExitTime,
-                    Duration = t.ExitTime.HasValue ? 
-                        t.ExitTime.Value - t.EntryTime : 
-                        TimeSpan.Zero,
-                    Status = t.ExitTime.HasValue ? "Keluar" : "Masuk",
                     TotalAmount = t.TotalAmount
                 })
                 .ToListAsync();
@@ -1801,46 +1785,29 @@ namespace ParkIRC.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> UpdateParkingRates(ParkingRateViewModel model)
+        public async Task<IActionResult> UpdateParkingRates(ParkingRates rates)
         {
-            try
+            if (!ModelState.IsValid)
             {
-                var rates = await _context.ParkingRates.FirstOrDefaultAsync();
-                if (rates == null)
-                {
-                    rates = new ParkingRates();
-                    var config = new ParkingRateConfiguration {
-                        VehicleType = "Default",
-                        HourlyRate = 0,
-                        DailyRate = 0,
-                        WeeklyRate = 0,
-                        MonthlyRate = 0,
-                        BaseRate = 0,
-                        PenaltyRate = 0,
-                        IsActive = true,
-                        EffectiveFrom = DateTime.Now,
-                        CreatedBy = "System",
-                        LastModifiedBy = "System"
-                    };
-                    _context.ParkingRates.Add(rates);
-                }
-
-                rates.MotorcycleRate = model.MotorcycleRate;
-                rates.CarRate = model.CarRate;
-                rates.AdditionalHourRate = model.AdditionalHourRate;
-                rates.MaximumDailyRate = model.MaximumDailyRate;
-                rates.LastUpdated = DateTime.Now;
-                rates.UpdatedBy = User.Identity.Name;
-
-                await _context.SaveChangesAsync();
-                TempData["Message"] = "Tarif parkir berhasil diupdate";
-                return RedirectToAction(nameof(Index));
+                return BadRequest(ModelState);
             }
-            catch (Exception ex)
+
+            var existingRates = await _context.ParkingRates.FirstOrDefaultAsync();
+            if (existingRates == null)
             {
-                _logger.LogError(ex, "Error updating parking rates");
-                return View(model);
+                _context.ParkingRates.Add(rates);
             }
+            else
+            {
+                existingRates.MotorcycleRate = rates.MotorcycleRate;
+                existingRates.CarRate = rates.CarRate;
+                existingRates.AdditionalHourRate = rates.AdditionalHourRate;
+                existingRates.MaximumDailyRate = rates.MaximumDailyRate;
+                existingRates.UpdatedBy = rates.UpdatedBy;
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
         }
     }
 }
