@@ -584,7 +584,7 @@ namespace ParkIRC.Controllers
                 .FirstOrDefaultAsync();
         }
 
-        private (int Hours, string Display) CalculateDuration(DateTime start, DateTime? end)
+        private static (int Hours, string Display) CalculateDuration(DateTime start, DateTime? end)
         {
             if (!end.HasValue)
                 return (0, "0h 0m");
@@ -1933,6 +1933,7 @@ namespace ParkIRC.Controllers
                 transaction.PaymentMethod = paymentMethod;
                 transaction.PaymentStatus = "Paid";
                 transaction.Status = "Completed";
+                _context.ParkingTransactions.Update(transaction);
 
                 // Update status kendaraan dan slot parkir
                 transaction.Vehicle.IsParked = false;
@@ -1976,6 +1977,12 @@ namespace ParkIRC.Controllers
         {
             public string VehicleNumber { get; set; } = string.Empty;
             public string PaymentMethod { get; set; } = "Cash";
+        }
+
+        private int GetOccupiedSpots()
+        {
+            return _context.ParkingTransactions
+                .Count(t => t.ExitTime == null || t.ExitTime == default(DateTime));
         }
     }
 }
