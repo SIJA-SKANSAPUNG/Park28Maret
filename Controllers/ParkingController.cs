@@ -1543,8 +1543,8 @@ namespace ParkIRC.Controllers
                         Duration = t.ExitTime != default(DateTime) ? 
                             (t.ExitTime.Value - t.EntryTime).TotalMinutes.ToString("0") : 
                             "In Progress",
-                        TotalAmount = t.TotalAmount,
-                        PaymentMethod = t.PaymentMethod
+                        Amount = t.TotalAmount,
+                        Status = t.ExitTime != default(DateTime) ? "Completed" : "In Progress"
                     })
                     .ToListAsync();
 
@@ -1868,195 +1868,6 @@ namespace ParkIRC.Controllers
             }
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GenerateReport(string reportType, string reportFormat, string startDate = null, string endDate = null)
-        {
-            try
-            {
-                var query = _context.ParkingTransactions
-                    .Include(t => t.Vehicle)
-                    .AsQueryable();
-
-                // Apply date filter based on report type
-                DateTime filterStartDate;
-                DateTime filterEndDate;
-
-                switch (reportType)
-                {
-                    case "daily":
-                        filterStartDate = DateTime.Today;
-                        filterEndDate = DateTime.Today.AddDays(1).AddTicks(-1);
-                        break;
-                    case "weekly":
-                        filterStartDate = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek);
-                        filterEndDate = filterStartDate.AddDays(7).AddTicks(-1);
-                        break;
-                    case "monthly":
-                        filterStartDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-                        filterEndDate = filterStartDate.AddMonths(1).AddTicks(-1);
-                        break;
-                    case "custom":
-                        if (string.IsNullOrEmpty(startDate) || string.IsNullOrEmpty(endDate))
-                        {
-                            return BadRequest("Start date and end date are required for custom reports");
-                        }
-                        filterStartDate = DateTime.Parse(startDate);
-                        filterEndDate = DateTime.Parse(endDate).AddDays(1).AddTicks(-1);
-                        break;
-                    default:
-                        return BadRequest("Invalid report type");
-                }
-
-                query = query.Where(t => t.EntryTime >= filterStartDate && t.EntryTime <= filterEndDate);
-
-                // Get report data
-                var transactions = await query
-                    .OrderByDescending(t => t.EntryTime)
-                    .Select(t => new
-                    {
-                        t.TransactionNumber,
-                        VehicleNumber = t.Vehicle.VehicleNumber,
-                        VehicleType = t.Vehicle.VehicleType,
-                        t.EntryTime,
-                        t.ExitTime,
-                        t.Amount,
-                        t.TotalAmount,
-                        t.Status,
-                        t.PaymentMethod
-                    })
-                    .ToListAsync();
-
-                // Calculate summary
-                var summary = new
-                {
-                    TotalTransactions = transactions.Count,
-                    TotalRevenue = transactions.Sum(t => t.TotalAmount),
-                    CompletedTransactions = transactions.Count(t => t.Status == "Completed"),
-                    ActiveTransactions = transactions.Count(t => t.Status == "Active"),
-                    CancelledTransactions = transactions.Count(t => t.Status == "Cancelled"),
-                    VehicleTypeDistribution = transactions
-                        .GroupBy(t => t.VehicleType)
-                        .Select(g => new { VehicleType = g.Key, Count = g.Count() })
-                        .ToList()
-                };
-
-                // Generate report based on format
-                byte[] fileContents;
-                string contentType;
-                string fileName;
-
-                if (reportFormat == "pdf")
-                {
-                    // Generate PDF report
-                    using (var ms = new MemoryStream())
-                    {
-                        using (var writer = new PdfWriter(ms))
-                        {
-                            using (var pdf = new PdfDocument(writer))
-                            {
-                                var document = new Document(pdf);
-
-                                // Title
-                                var title = new Paragraph($"Laporan Parkir - {reportType.ToUpper()}")
-                                    .SetTextAlignment(TextAlignment.CENTER)
-                                    .SetFontSize(16);
-                                document.Add(title);
-                                document.Add(new Paragraph($"Periode: {filterStartDate.ToString("dd/MM/yyyy")} - {filterEndDate.ToString("dd/MM/yyyy")}"));
-                                document.Add(new Paragraph("\n"));
-
-                                // Summary
-                                document.Add(new Paragraph("Ringkasan:"));
-                                document.Add(new Paragraph($"Total Transaksi: {summary.TotalTransactions}"));
-                                document.Add(new Paragraph($"Total Pendapatan: Rp {summary.TotalRevenue:N0}"));
-                                document.Add(new Paragraph($"Transaksi Selesai: {summary.CompletedTransactions}"));
-                                document.Add(new Paragraph($"Transaksi Aktif: {summary.ActiveTransactions}"));
-                                document.Add(new Paragraph($"Transaksi Batal: {summary.CancelledTransactions}"));
-                                document.Add(new Paragraph("\n"));
-
-                                // Table
-                                var table = new Table(7)
-                                    .SetWidth(UnitValue.CreatePercentValue(100));
-                                // Add table headers and rows...
-
-                                document.Add(table);
-                                document.Close();
-                            }
-                        }
-                        fileContents = ms.ToArray();
-                    }
-
-                    contentType = "application/pdf";
-                    fileName = $"parking_report_{reportType}_{DateTime.Now:yyyyMMdd}.pdf";
-                }
-                else if (reportFormat == "excel")
-                {
-                    // Generate Excel report
-                    using (var package = new OfficeOpenXml.ExcelPackage())
-                    {
-                        var worksheet = package.Workbook.Worksheets.Add("Report");
-
-                        // Add title
-                        worksheet.Cells[1, 1].Value = $"Laporan Parkir - {reportType.ToUpper()}";
-                        worksheet.Cells[2, 1].Value = $"Periode: {filterStartDate.ToString("dd/MM/yyyy")} - {filterEndDate.ToString("dd/MM/yyyy")}";
-
-                        // Add summary
-                        worksheet.Cells[4, 1].Value = "Ringkasan:";
-                        worksheet.Cells[5, 1].Value = "Total Transaksi:";
-                        worksheet.Cells[5, 2].Value = summary.TotalTransactions;
-                        worksheet.Cells[6, 1].Value = "Total Pendapatan:";
-                        worksheet.Cells[6, 2].Value = $"Rp {summary.TotalRevenue:N0}";
-                        worksheet.Cells[7, 1].Value = "Transaksi Selesai:";
-                        worksheet.Cells[7, 2].Value = summary.CompletedTransactions;
-                        worksheet.Cells[8, 1].Value = "Transaksi Aktif:";
-                        worksheet.Cells[8, 2].Value = summary.ActiveTransactions;
-                        worksheet.Cells[9, 1].Value = "Transaksi Batal:";
-                        worksheet.Cells[9, 2].Value = summary.CancelledTransactions;
-
-                        // Add headers
-                        var headers = new[] { "No. Transaksi", "No. Kendaraan", "Jenis", "Waktu Masuk", "Waktu Keluar", "Total", "Status" };
-                        for (var i = 0; i < headers.Length; i++)
-                        {
-                            worksheet.Cells[11, i + 1].Value = headers[i];
-                        }
-
-                        // Add data
-                        var row = 12;
-                        foreach (var transaction in transactions)
-                        {
-                            worksheet.Cells[row, 1].Value = transaction.TransactionNumber;
-                            worksheet.Cells[row, 2].Value = transaction.VehicleNumber;
-                            worksheet.Cells[row, 3].Value = transaction.VehicleType;
-                            worksheet.Cells[row, 4].Value = $"{transaction.EntryTime:dd/MM/yyyy HH:mm}";
-                            worksheet.Cells[row, 5].Value = transaction.ExitTime == default(DateTime) ? "-" : $"{transaction.ExitTime:dd/MM/yyyy HH:mm}";
-                            worksheet.Cells[row, 6].Value = $"Rp {transaction.TotalAmount:N0}";
-                            worksheet.Cells[row, 7].Value = transaction.Status;
-                            row++;
-                        }
-
-                        // Auto fit columns
-                        worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
-
-                        fileContents = package.GetAsByteArray();
-                    }
-
-                    contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                    fileName = $"parking_report_{reportType}_{DateTime.Now:yyyyMMdd}.xlsx";
-                }
-                else
-                {
-                    return BadRequest("Invalid report format");
-                }
-
-                return File(fileContents, contentType, fileName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generating report");
-                return StatusCode(500, new { error = "Internal server error" });
-            }
-        }
-
-        [Authorize]
         public IActionResult QuickAccess()
         {
             // Get some basic statistics for the dashboard
@@ -2167,11 +1978,11 @@ namespace ParkIRC.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
-    }
 
-    public class TransactionRequest
-    {
-        public string VehicleNumber { get; set; } = string.Empty;
-        public string PaymentMethod { get; set; } = "Cash";
+        public class TransactionRequest
+        {
+            public string VehicleNumber { get; set; } = string.Empty;
+            public string PaymentMethod { get; set; } = "Cash";
+        }
     }
 }

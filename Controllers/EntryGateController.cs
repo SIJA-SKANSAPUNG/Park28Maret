@@ -86,8 +86,8 @@ namespace ParkIRC.Controllers
         {
             if (ModelState.IsValid)
             {
-                int gateCount = await _context.EntryGates.CountAsync();
-                gate.Id = $"ENTRY{gateCount + 1}";
+                int gateCount = await _context.EntryGates.CountAsync() + 1;
+                gate.Id = $"ENTRY{gateCount}";
                 gate.IsActive = true;
                 gate.LastActivity = DateTime.Now;
                 
@@ -155,7 +155,7 @@ namespace ParkIRC.Controllers
                 {
                     TicketNumber = await _ticketService.GenerateTicketNumber(request.VehicleType),
                     EntryTime = DateTime.Now,
-                    EntryPoint = request.GateId,
+                    EntryPoint = request.GateId.ToString(), // Convert to string
                     VehicleImagePath = savedImagePath,
                     VehicleNumber = request.VehicleNumber, // Input manual
                     VehicleType = request.VehicleType,     // Input manual/preset
@@ -199,33 +199,26 @@ namespace ParkIRC.Controllers
                 var transaction = new ParkingTransaction
                 {
                     TicketNumber = ticketNumber,
+                    EntryPoint = request.EntryGateId.ToString(), // Convert to string
+                    ParkingSpaceId = availableSpace.Id.ToString(), // Convert to string
                     VehicleNumber = request.VehicleNumber,
                     EntryTime = DateTime.Now,
-                    ParkingSpaceId = availableSpace.Id.ToString(),
                     VehicleType = request.VehicleType,
                     ImagePath = request.ImagePath
                 };
 
                 _context.ParkingTransactions.Add(transaction);
-                
-                // Update space status
-                availableSpace.IsOccupied = true;
-                availableSpace.CurrentVehicle = new Vehicle { VehicleNumber = request.VehicleNumber };
-
                 await _context.SaveChangesAsync();
-
-                // Print ticket
-                await _printerService.PrintEntryTicket(ticketNumber);
 
                 return Ok(new { 
                     ticketNumber = ticketNumber,
-                    spaceNumber = availableSpace.SpaceNumber
+                    spaceNumber = availableSpace.SpaceNumber.ToString() // Convert to string
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in automatic space assignment");
-                return StatusCode(500);
+                _logger.LogError(ex, "Error assigning parking space");
+                return StatusCode(500, new { message = "Terjadi kesalahan saat menetapkan ruang parkir" });
             }
         }
     }

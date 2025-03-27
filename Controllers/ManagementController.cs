@@ -1799,11 +1799,14 @@ namespace ParkIRC.Controllers
             }
             else
             {
-                existingRates.MotorcycleRate = rates.MotorcycleRate;
-                existingRates.CarRate = rates.CarRate;
-                existingRates.AdditionalHourRate = rates.AdditionalHourRate;
-                existingRates.MaximumDailyRate = rates.MaximumDailyRate;
-                existingRates.UpdatedBy = rates.UpdatedBy;
+                // Convert to configuration for update
+                var rateConfig = rates.ToConfiguration();
+                
+                existingRates.MotorcycleRate = rateConfig.MotorcycleRate;
+                existingRates.CarRate = rateConfig.CarRate;
+                existingRates.AdditionalHourRate = rateConfig.AdditionalHourRate;
+                existingRates.MaximumDailyRate = rateConfig.MaximumDailyRate;
+                existingRates.UpdatedBy = rateConfig.LastModifiedBy;
             }
 
             await _context.SaveChangesAsync();
