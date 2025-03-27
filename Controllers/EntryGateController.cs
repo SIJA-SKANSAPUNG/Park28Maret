@@ -186,9 +186,22 @@ namespace ParkIRC.Controllers
         {
             try
             {
+                // Validate input
+                if (string.IsNullOrEmpty(request.VehicleType) || 
+                    string.IsNullOrEmpty(request.VehicleNumber))
+                {
+                    return BadRequest(new { message = "Invalid vehicle information" });
+                }
+
+                // Parse GateId to int if needed
+                if (!int.TryParse(request.GateId, out int gateId))
+                {
+                    return BadRequest(new { message = "Invalid gate ID" });
+                }
+
                 // Automatic space assignment
                 var availableSpace = await _context.ParkingSpaces
-                    .Where(s => !s.IsOccupied && s.VehicleType == request.VehicleType)
+                    .Where(s => !s.IsOccupied && s.SpaceType.ToLower() == request.VehicleType.ToLower())
                     .OrderBy(s => s.SpaceNumber)
                     .FirstOrDefaultAsync();
 
@@ -202,14 +215,14 @@ namespace ParkIRC.Controllers
 
                 // Update parking space
                 availableSpace.IsOccupied = true;
-                availableSpace.OccupiedTime = DateTime.Now;
+                availableSpace.LastOccupiedTime = DateTime.Now;
 
                 // Create parking transaction
                 var transaction = new ParkingTransaction
                 {
                     TicketNumber = ticketNumber,
                     EntryTime = DateTime.Now,
-                    EntryPoint = request.GateId.ToString(), 
+                    EntryPoint = gateId.ToString(), 
                     VehicleNumber = request.VehicleNumber,
                     VehicleType = request.VehicleType,
                     ParkingSpaceId = availableSpace.Id, 
@@ -222,7 +235,7 @@ namespace ParkIRC.Controllers
                 return Ok(new 
                 { 
                     ticketNumber = ticketNumber, 
-                    spaceNumber = availableSpace.SpaceNumber.ToString() 
+                    spaceNumber = availableSpace.SpaceNumber 
                 });
             }
             catch (Exception ex)

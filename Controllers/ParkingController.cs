@@ -900,6 +900,28 @@ namespace ParkIRC.Controllers
             };
         }
 
+        private int GetOccupiedSpots()
+        {
+            return _context.ParkingTransactions
+                .Count(t => t.ExitTime == null || t.ExitTime == default(DateTime));
+        }
+
+        [ResponseCache(Duration = 60)]
+        public async Task<IActionResult> Dashboard()
+        {
+            int occupiedSpots = GetOccupiedSpots();
+            int totalSpots = await _context.ParkingSpaces.CountAsync();
+            int availableSpots = totalSpots - occupiedSpots;
+
+            var model = new DashboardViewModel 
+            { 
+                AvailableSpots = availableSpots,
+                OccupiedSpots = occupiedSpots
+            };
+
+            return View(model);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> BackupData(string backupPeriod, DateTime? startDate, DateTime? endDate, bool includeImages = true)
