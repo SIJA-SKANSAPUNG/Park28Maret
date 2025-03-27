@@ -1795,7 +1795,7 @@ namespace ParkIRC.Controllers
             var existingRates = await _context.ParkingRates.FirstOrDefaultAsync();
             if (existingRates == null)
             {
-                _context.ParkingRates.Add(rates);
+                await _context.ParkingRates.AddAsync(rates);
             }
             else
             {

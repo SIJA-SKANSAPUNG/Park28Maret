@@ -18,6 +18,7 @@ namespace ParkIRC.ViewModels
     public class VehicleHistoryPageItemViewModel
     {
         public string Id { get; set; } = string.Empty;
+        public string TransactionNumber { get; set; } = string.Empty;
         public string TicketNumber { get; set; } = string.Empty;
         public string VehicleNumber { get; set; } = string.Empty;
         public string VehicleType { get; set; } = string.Empty;

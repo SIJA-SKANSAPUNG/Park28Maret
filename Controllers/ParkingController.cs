@@ -1453,7 +1453,7 @@ namespace ParkIRC.Controllers
                 await _hubContext.Clients.All.SendAsync("UpdateDashboard");
 
                 // Cetak tiket keluar
-                var duration = transaction.ExitTime.HasValue ? (transaction.ExitTime.Value - transaction.EntryTime).TotalHours : 0;
+                var duration = transaction.ExitTime.HasValue ? (transaction.ExitTime.Value - transaction.EntryTime).TotalMinutes : 0;
                 var receiptData = new {
                     transactionNumber = transaction.TransactionNumber,
                     vehicleNumber = transaction.Vehicle.VehicleNumber,
@@ -1492,7 +1492,7 @@ namespace ParkIRC.Controllers
                 
                 Waktu Masuk: {data.entryTime:dd/MM/yyyy HH:mm}
                 Waktu Keluar: {data.exitTime:dd/MM/yyyy HH:mm}
-                Durasi: {Math.Floor(data.duration)} jam {Math.Round((data.duration % 1) * 60)} menit
+                Durasi: {Math.Floor(data.duration / 60)} jam {data.duration % 60} menit
                 
                 Total Biaya: Rp {data.amount:N0}
                 Metode Bayar: {data.paymentMethod}
@@ -1540,8 +1540,8 @@ namespace ParkIRC.Controllers
                         VehicleType = t.Vehicle.VehicleType,
                         EntryTime = t.EntryTime,
                         ExitTime = t.ExitTime,
-                        Duration = t.ExitTime.HasValue ? 
-                            (t.ExitTime.Value.Subtract(t.EntryTime)).ToString("hh\\:mm") : 
+                        Duration = t.ExitTime != default(DateTime) ? 
+                            (t.ExitTime.Value - t.EntryTime).TotalMinutes.ToString("0") : 
                             "In Progress",
                         TotalAmount = t.TotalAmount,
                         PaymentMethod = t.PaymentMethod
@@ -2102,7 +2102,7 @@ namespace ParkIRC.Controllers
                     vehicleNumber = parkingTransaction.Vehicle.VehicleNumber,
                     entryTime = parkingTransaction.EntryTime,
                     entryPhoto = parkingTransaction.Vehicle.EntryPhotoPath,
-                    duration = duration.TotalHours,
+                    duration = duration.TotalMinutes,
                     amount = totalAmount
                 });
             }
@@ -2142,7 +2142,7 @@ namespace ParkIRC.Controllers
                 await _hubContext.Clients.All.SendAsync("OpenExitGate", transaction.ParkingSpace.SpaceNumber);
 
                 // Cetak tiket keluar
-                var duration = transaction.ExitTime.HasValue ? (transaction.ExitTime.Value - transaction.EntryTime).TotalHours : 0;
+                var duration = transaction.ExitTime.HasValue ? (transaction.ExitTime.Value - transaction.EntryTime).TotalMinutes : 0;
                 var receiptData = new {
                     transactionNumber = transaction.TransactionNumber,
                     vehicleNumber = transaction.Vehicle.VehicleNumber,

@@ -86,8 +86,8 @@ namespace ParkIRC.Controllers
         {
             if (ModelState.IsValid)
             {
-                int gateCount = await _context.EntryGates.CountAsync() + 1;
-                gate.Id = $"ENTRY{gateCount}";
+                int gateCount = await _context.EntryGates.CountAsync();
+                gate.Id = $"ENTRY{gateCount + 1}";
                 gate.IsActive = true;
                 gate.LastActivity = DateTime.Now;
                 
