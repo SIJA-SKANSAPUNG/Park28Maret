@@ -357,7 +357,7 @@ namespace ParkIRC.Controllers
                     await _context.SaveChangesAsync();
                     
                 // Notify clients about the update via SignalR
-                    if (_hubContext != null)
+                if (_hubContext != null)
                 {
                     await _hubContext.Clients.All.SendAsync("UpdateParkingStatus", new
                     {
@@ -584,19 +584,22 @@ namespace ParkIRC.Controllers
                 .FirstOrDefaultAsync();
         }
 
-        private int CalculateDuration(DateTime entryTime, DateTime? exitTime)
+        private (int Hours, string Display) CalculateDuration(DateTime start, DateTime? end)
         {
-            if (!exitTime.HasValue)
-                return 0;
+            if (!end.HasValue)
+                return (0, "0h 0m");
 
-            var duration = exitTime.Value - entryTime;
-            return (int)Math.Ceiling(duration.TotalHours);
+            var duration = end.Value - start;
+            int hoursForCalc = (int)Math.Ceiling(duration.TotalHours);
+            var hoursForDisplay = Math.Floor(duration.TotalHours);
+            var minutes = duration.Minutes;
+
+            return (hoursForCalc, $"{hoursForDisplay}h {minutes}m");
         }
 
         private static decimal CalculateParkingFee(DateTime entryTime, DateTime exitTime, decimal hourlyRate)
         {
-            var duration = exitTime - entryTime;
-            var hours = (decimal)Math.Ceiling(duration.TotalHours);
+            var (hours, _) = CalculateDuration(entryTime, exitTime);
             return hours * hourlyRate;
         }
 
@@ -1782,7 +1785,7 @@ namespace ParkIRC.Controllers
                     {
                         exitTime = t.ExitTime.HasValue ? t.ExitTime.Value.ToString("dd/MM/yyyy HH:mm") : "",
                         vehicleNumber = t.Vehicle.VehicleNumber,
-                        duration = CalculateDuration(t.EntryTime, t.ExitTime),
+                        duration = CalculateDuration(t.EntryTime, t.ExitTime).Display,
                         totalAmount = t.TotalAmount
                     })
                     .ToListAsync();
@@ -1794,18 +1797,6 @@ namespace ParkIRC.Controllers
                 _logger.LogError(ex, "Error getting recent exits");
                 return StatusCode(500, new { success = false, message = "Gagal memuat data kendaraan keluar terbaru" });
             }
-        }
-
-        private string CalculateDuration(DateTime start, DateTime? end)
-        {
-            if (!end.HasValue)
-                return "0h 0m";
-
-            var duration = end.Value - start;
-            var hours = Math.Floor(duration.TotalHours);
-            var minutes = duration.Minutes;
-
-            return $"{hours}h {minutes}m";
         }
 
         [HttpGet]
@@ -1915,7 +1906,7 @@ namespace ParkIRC.Controllers
                     vehicleNumber = parkingTransaction.Vehicle.VehicleNumber,
                     entryTime = parkingTransaction.EntryTime,
                     entryPhoto = parkingTransaction.Vehicle.EntryPhotoPath,
-                    duration = duration.TotalMinutes,
+                    duration = CalculateDuration(parkingTransaction.EntryTime, parkingTransaction.ExitTime).Display,
                     amount = totalAmount
                 });
             }
